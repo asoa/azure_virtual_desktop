@@ -70,70 +70,70 @@ packer_build:
     - packer init packer/packer.pkr.hcl
     - packer build --var-file=packer/packer.pkrvars.hcl ./packer
 
-# terraform_desktop_validate:
-#   stage: terraform_desktop_validate
-#   tags:
-#     - docker
-#   image: asoa/azure-runner:2.0.0
-#   script:
-#     - cd terraform_avd_desktop
-#     - terraform init
-#     - terraform validate
+terraform_desktop_validate:
+  stage: terraform_desktop_validate
+  tags:
+    - docker
+  image: asoa/azure-runner:3.0.0
+  script:
+    - cd terraform_avd_desktop
+    - terraform init
+    - terraform validate
 
-# terraform_desktop_apply:
-#   stage: terraform_desktop_apply
-#   tags:
-#     - docker
-#   image: asoa/azure-runner:2.0.0
-#   script:
-#     - |
-#       cd terraform_avd_desktop
-#       terraform init
-#       terraform apply -auto-approve
-#       # Get Terraform outputs
-#       outputs=$(terraform output -json)
-#       echo $outputs
-#       # Parse the JSON output
-#       dag_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_application_group.value')
-#       workspace_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_workspace.value')
-#       location=$(echo $outputs | jq -r '.location.value')
-#       hostpool_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_host_pool.value')
-#       hostpool_rg_name=$(echo $outputs | jq -r '.azure_virtual_desktop_compute_resource_group.value')
-#       registration_token=$(echo $outputs | jq -r '.registration_token.value')
-#       echo "REGISTRATION_TOKEN=$registration_token" >> $CI_PROJECT_DIR/build.env
-#       echo "HOST_POOL_NAME=$hostpool_name" >> $CI_PROJECT_DIR/build.env
-#       echo "HOST_POOL_RG_NAME=$hostpool_rg_name" >> $CI_PROJECT_DIR/build.env
-#   artifacts:
-#     reports:
-#       dotenv: build.env
+terraform_desktop_apply:
+  stage: terraform_desktop_apply
+  tags:
+    - docker
+  image: asoa/azure-runner:3.0.0
+  script:
+    - |
+      cd terraform_avd_desktop
+      terraform init
+      terraform apply -auto-approve
+      # Get Terraform outputs
+      outputs=$(terraform output -json)
+      echo $outputs
+      # Parse the JSON output
+      dag_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_application_group.value')
+      workspace_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_workspace.value')
+      location=$(echo $outputs | jq -r '.location.value')
+      hostpool_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_host_pool.value')
+      hostpool_rg_name=$(echo $outputs | jq -r '.azure_virtual_desktop_compute_resource_group.value')
+      registration_token=$(echo $outputs | jq -r '.registration_token.value')
+      echo "REGISTRATION_TOKEN=$registration_token" >> $CI_PROJECT_DIR/build.env
+      echo "HOST_POOL_NAME=$hostpool_name" >> $CI_PROJECT_DIR/build.env
+      echo "HOST_POOL_RG_NAME=$hostpool_rg_name" >> $CI_PROJECT_DIR/build.env
+  artifacts:
+    reports:
+      dotenv: build.env
     
-# terraform_host_validate:
-#   stage: terraform_host_validate
-#   tags:
-#     - docker
-#   image: asoa/azure-runner:2.0.0
-#   script:
-#     - cd terraform_avd_host
-#     - sed -i "s|#{REGISTRATION_TOKEN}#|$REGISTRATION_TOKEN|g" main.tf
-#     - sed -i "s|#{HOST_POOL_NAME}#|$HOST_POOL_NAME|g" main.tf
-#     - echo $REGISTRATION_TOKEN
-#     - terraform init
-#     - terraform validate
-#   dependencies:
-#     - terraform_desktop_apply
+terraform_host_validate:
+  stage: terraform_host_validate
+  tags:
+    - docker
+  image: asoa/azure-runner:3.0.0
+  script:
+    - cd terraform_avd_host
+    - sed -i "s|#{REGISTRATION_TOKEN}#|$REGISTRATION_TOKEN|g" main.tf
+    - sed -i "s|#{HOST_POOL_NAME}#|$HOST_POOL_NAME|g" main.tf
+    - echo $REGISTRATION_TOKEN
+    - terraform init
+    - terraform validate
+  dependencies:
+    - terraform_desktop_apply
 
-# terraform_host_apply:
-#   stage: terraform_host_apply
-#   tags:
-#     - docker
-#   image: asoa/azure-runner:2.0.0
-#   script:
-#     - cd terraform_avd_host
-#     - sed -i "s|#{LOCAL_ADMIN_PASSWORD}#|$gitlab_local_admin_password|g" terraform.auto.tfvars
-#     - sed -i "s|#{HOST_POOL_NAME}#|$HOST_POOL_NAME|g" terraform.auto.tfvars
-#     - sed -i "s|#{REGISTRATION_TOKEN}#|$REGISTRATION_TOKEN|g" main.tf
-#     - sed -i "s|#{HOST_POOL_RG_NAME}#|$HOST_POOL_RG_NAME|g" terraform.auto.tfvars
-#     - echo terraform.auto.tfvars
-#     - terraform init
-#     - terraform apply -auto-approve
+terraform_host_apply:
+  stage: terraform_host_apply
+  tags:
+    - docker
+  image: asoa/azure-runner:3.0.0
+  script:
+    - cd terraform_avd_host
+    - sed -i "s|#{LOCAL_ADMIN_PASSWORD}#|$gitlab_local_admin_password|g" terraform.auto.tfvars
+    - sed -i "s|#{HOST_POOL_NAME}#|$HOST_POOL_NAME|g" terraform.auto.tfvars
+    - sed -i "s|#{REGISTRATION_TOKEN}#|$REGISTRATION_TOKEN|g" main.tf
+    - sed -i "s|#{HOST_POOL_RG_NAME}#|$HOST_POOL_RG_NAME|g" terraform.auto.tfvars
+    - echo terraform.auto.tfvars
+    - terraform init
+    - terraform apply -auto-approve
     
