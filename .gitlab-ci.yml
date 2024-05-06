@@ -1,0 +1,139 @@
+stages:
+  - packer_validate
+  - create_image_version
+  - packer_build
+  # - stig (chef)
+  # - test (evaluate-stig)
+  - terraform_desktop_validate
+  - terraform_desktop_apply
+  - terraform_host_validate
+  - terraform_host_apply
+
+default:
+  before_script:
+    - |
+      sed -i "s|#{client_id}#|$gitlab_client_id|g" packer/packer.pkrvars.hcl
+      sed -i "s|#{client_secret}#|$gitlab_client_secret|g" packer/packer.pkrvars.hcl
+      sed -i "s|#{subscription_id}#|$gitlab_subscription_id|g" packer/packer.pkrvars.hcl
+      sed -i "s|#{tenant_id}#|$gitlab_tenant_id|g" packer/packer.pkrvars.hcl
+      sed -i "s|#{region1}#|$gitlab_region1|g" packer/packer.pkrvars.hcl
+      sed -i "s|#{ip_address1}#|$gitlab_ip_address|g" packer/packer.pkrvars.hcl
+      sed -i "s|#{vm_name}#|$gitlab_vm_name|g" packer/packer.pkr.hcl
+      export ARM_CLIENT_ID=$gitlab_client_id
+      export ARM_CLIENT_SECRET=$gitlab_client_secret
+      export ARM_TENANT_ID=$gitlab_tenant_id
+      export ARM_SUBSCRIPTION_ID=$gitlab_subscription_id
+      export ARM_ENVIRONMENT=$gitlab_arm_environment
+      export ARM_SKIP_PROVIDER_REGISTRATION=true
+      
+packer_validate:
+  stage: packer_validate
+  tags:
+    - docker
+  image:
+    name: hashicorp/packer:1.10
+    entrypoint: 
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'    
+  script:
+    - packer init packer/packer.pkr.hcl
+    - packer validate --var-file=packer/packer.pkrvars.hcl ./packer
+
+create_image_version:
+  stage: create_image_version
+  tags:
+    - docker
+  image: asoa/azure-runner:2.0.0
+  script:
+    - |
+      az cloud set -n azureusgovernment 
+      az login --service-principal -u $gitlab_client_id -p $gitlab_client_secret --tenant $gitlab_tenant_id
+      az sig image-definition create \
+        --resource-group $gitlab_image_gallery_rg \
+        --gallery-name $gitlab_image_gallery_name \
+        --gallery-image-definition $gitlab_image_name \
+        --publisher $gitlab_image_publisher \
+        --offer $gitlab_image_offer \
+        --sku $gitlab_image_sku \
+        --hyper-v-generation $gitlab_hyper_v_generation \
+        --os-type Windows
+
+packer_build:
+  stage: packer_build
+  tags: 
+    - docker
+  image: asoa/azure-runner:2.0.0
+  script:
+    - az cloud set -n azureusgovernment
+    - az login --service-principal -u $gitlab_client_id -p $gitlab_client_secret --tenant $gitlab_tenant_id
+    # - cat packer/packer.pkrvars.hcl
+    - packer init packer/packer.pkr.hcl
+    - packer build --var-file=packer/packer.pkrvars.hcl ./packer
+
+# terraform_desktop_validate:
+#   stage: terraform_desktop_validate
+#   tags:
+#     - docker
+#   image: asoa/azure-runner:2.0.0
+#   script:
+#     - cd terraform_avd_desktop
+#     - terraform init
+#     - terraform validate
+
+# terraform_desktop_apply:
+#   stage: terraform_desktop_apply
+#   tags:
+#     - docker
+#   image: asoa/azure-runner:2.0.0
+#   script:
+#     - |
+#       cd terraform_avd_desktop
+#       terraform init
+#       terraform apply -auto-approve
+#       # Get Terraform outputs
+#       outputs=$(terraform output -json)
+#       echo $outputs
+#       # Parse the JSON output
+#       dag_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_application_group.value')
+#       workspace_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_workspace.value')
+#       location=$(echo $outputs | jq -r '.location.value')
+#       hostpool_name=$(echo $outputs | jq -r '.azurerm_virtual_desktop_host_pool.value')
+#       hostpool_rg_name=$(echo $outputs | jq -r '.azure_virtual_desktop_compute_resource_group.value')
+#       registration_token=$(echo $outputs | jq -r '.registration_token.value')
+#       echo "REGISTRATION_TOKEN=$registration_token" >> $CI_PROJECT_DIR/build.env
+#       echo "HOST_POOL_NAME=$hostpool_name" >> $CI_PROJECT_DIR/build.env
+#       echo "HOST_POOL_RG_NAME=$hostpool_rg_name" >> $CI_PROJECT_DIR/build.env
+#   artifacts:
+#     reports:
+#       dotenv: build.env
+    
+# terraform_host_validate:
+#   stage: terraform_host_validate
+#   tags:
+#     - docker
+#   image: asoa/azure-runner:2.0.0
+#   script:
+#     - cd terraform_avd_host
+#     - sed -i "s|#{REGISTRATION_TOKEN}#|$REGISTRATION_TOKEN|g" main.tf
+#     - sed -i "s|#{HOST_POOL_NAME}#|$HOST_POOL_NAME|g" main.tf
+#     - echo $REGISTRATION_TOKEN
+#     - terraform init
+#     - terraform validate
+#   dependencies:
+#     - terraform_desktop_apply
+
+# terraform_host_apply:
+#   stage: terraform_host_apply
+#   tags:
+#     - docker
+#   image: asoa/azure-runner:2.0.0
+#   script:
+#     - cd terraform_avd_host
+#     - sed -i "s|#{LOCAL_ADMIN_PASSWORD}#|$gitlab_local_admin_password|g" terraform.auto.tfvars
+#     - sed -i "s|#{HOST_POOL_NAME}#|$HOST_POOL_NAME|g" terraform.auto.tfvars
+#     - sed -i "s|#{REGISTRATION_TOKEN}#|$REGISTRATION_TOKEN|g" main.tf
+#     - sed -i "s|#{HOST_POOL_RG_NAME}#|$HOST_POOL_RG_NAME|g" terraform.auto.tfvars
+#     - echo terraform.auto.tfvars
+#     - terraform init
+#     - terraform apply -auto-approve
+    

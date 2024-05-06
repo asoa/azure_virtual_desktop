@@ -1,0 +1,5 @@
+resource_group_location = "usgovvirginia"
+workspace               = ""
+hostpool                = ""
+rfc3339                 = "2024-04-30T12:43:13Z"
+prefix                  = ""
